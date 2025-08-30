@@ -2,22 +2,32 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import ee
 import datetime
+import os
+import json
+import tempfile
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS
 
-# --- Initialize Earth Engine using Service Account ---
-SERVICE_ACCOUNT = 'my-service@ee-baraiyavishalbhai32.iam.gserviceaccount.com'
-KEY_FILE = 'service-account.json'  # path to your downloaded JSON key
+# Initialize Earth Engine using service account JSON from environment variable
+SERVICE_ACCOUNT = "my-service@ee-baraiyavishalbhai32.iam.gserviceaccount.com"
+key_json = os.environ.get("EE_SERVICE_ACCOUNT_JSON")  # Your JSON stored as env variable
 
-credentials = ee.ServiceAccountCredentials(SERVICE_ACCOUNT, KEY_FILE)
+if not key_json:
+    raise Exception("EE_SERVICE_ACCOUNT_JSON environment variable not set!")
+
+# Write JSON to temporary file
+with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".json") as f:
+    f.write(key_json)
+    key_file = f.name
+
+credentials = ee.ServiceAccountCredentials(SERVICE_ACCOUNT, key_file)
 ee.Initialize(credentials)
 
-# ---------------- API ----------------
+
 @app.route("/get_ndvi_evi", methods=["POST"])
 def get_ndvi_evi():
     try:
-        # Get JSON data from frontend
         req_data = request.get_json()
 
         min_lon = req_data.get("min_lon")
@@ -26,13 +36,13 @@ def get_ndvi_evi():
         max_lat = req_data.get("max_lat")
         start_date = req_data.get("start_date")
         end_date = req_data.get("end_date")
-        dataset = req_data.get("dataset", "MODIS/006/MOD13Q1")  # default dataset
+        dataset = "MODIS/006/MOD13Q1"
 
         # Validate inputs
         if None in [min_lon, max_lon, min_lat, max_lat, start_date, end_date]:
             return jsonify({"error": "min_lon, max_lon, min_lat, max_lat, start_date, end_date are required"}), 400
 
-        # Build polygon region
+        # Polygon region
         region = ee.Geometry.Polygon([[
             [min_lon, min_lat],
             [min_lon, max_lat],
@@ -41,7 +51,7 @@ def get_ndvi_evi():
             [min_lon, min_lat]
         ]])
 
-        # Load NDVI/EVI from selected dataset
+        # Load MODIS NDVI/EVI
         modis = (ee.ImageCollection(dataset)
                  .filterDate(start_date, end_date)
                  .select(["NDVI", "EVI"])
@@ -73,4 +83,5 @@ def get_ndvi_evi():
 
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
