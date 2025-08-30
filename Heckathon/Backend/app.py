@@ -6,10 +6,14 @@ import datetime
 app = Flask(__name__)
 CORS(app)  # Enable CORS
 
-# Initialize Earth Engine
-ee.Authenticate()
-ee.Initialize()
+# --- Initialize Earth Engine using Service Account ---
+SERVICE_ACCOUNT = 'my-service@ee-baraiyavishalbhai32.iam.gserviceaccount.com'
+KEY_FILE = 'service-account.json'  # path to your downloaded JSON key
 
+credentials = ee.ServiceAccountCredentials(SERVICE_ACCOUNT, KEY_FILE)
+ee.Initialize(credentials)
+
+# ---------------- API ----------------
 @app.route("/get_ndvi_evi", methods=["POST"])
 def get_ndvi_evi():
     try:
@@ -22,11 +26,7 @@ def get_ndvi_evi():
         max_lat = req_data.get("max_lat")
         start_date = req_data.get("start_date")
         end_date = req_data.get("end_date")
-        dataset = req_data.get("dataset", "MODIS/006/MOD13Q1")  # Only MODIS dataset supported
-
-        # Validate dataset - only MODIS allowed
-        if dataset != "MODIS/006/MOD13Q1":
-            return jsonify({"error": "Only MODIS/006/MOD13Q1 dataset is supported"}), 400
+        dataset = req_data.get("dataset", "MODIS/006/MOD13Q1")  # default dataset
 
         # Validate inputs
         if None in [min_lon, max_lon, min_lat, max_lat, start_date, end_date]:
